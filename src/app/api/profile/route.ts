@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 export async function GET() {
   try {
     const supabase = await createClient()
-    
+
     // Get the current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -40,7 +40,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Get the current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -61,7 +61,10 @@ export async function PUT(request: NextRequest) {
         updated_at: new Date().toISOString()
       })
       .eq('user_id', user.id)
-      .select()
+      .select(`
+        *,
+        role:roles(id, name, description)
+      `)
       .single()
 
     if (updateError) {
@@ -81,9 +84,9 @@ export async function PUT(request: NextRequest) {
       // Don't fail the request if auth metadata update fails
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: 'Profile updated successfully',
-      profile: updatedProfile 
+      profile: updatedProfile
     })
   } catch (error) {
     console.error('Error in PUT /api/profile:', error)
