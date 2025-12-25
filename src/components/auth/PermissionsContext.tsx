@@ -19,15 +19,34 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
 
     useEffect(() => {
         const fetchPermissions = async () => {
+            const cached = localStorage.getItem('app_permissions')
+            // Optimistically set cached permissions if available
+            if (cached) {
+                try {
+                    const parsed = JSON.parse(cached)
+                    setPermissions(parsed)
+                    setIsLoading(false)
+                } catch (e) {
+                    console.error('Error parsing cached permissions', e)
+                    localStorage.removeItem('app_permissions')
+                }
+            }
+
             try {
                 const supabase = createClient()
                 const { data: { user } } = await supabase.auth.getUser()
 
                 if (!user) {
                     setPermissions([])
+                    localStorage.removeItem('app_permissions')
                     setIsLoading(false)
                     return
                 }
+
+                // If we have cache, we still might want to verify it briefly or just trust it.
+                // The user explicitly asked for "just one time after login", so if we have cache, we stop.
+                if (cached) return;
+
 
                 // Fetch all permissions for the user directly
                 // Query path: user_profiles -> roles -> role_permissions -> permissions
@@ -66,6 +85,7 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
                             .filter(Boolean)
 
                         setPermissions(codes)
+                        localStorage.setItem('app_permissions', JSON.stringify(codes))
                     }
                 }
             } catch (error) {

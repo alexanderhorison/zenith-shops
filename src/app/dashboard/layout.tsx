@@ -97,6 +97,7 @@ export default function DashboardLayout({
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
+    localStorage.removeItem('app_permissions')
     router.push("/login")
     router.refresh()
   }
