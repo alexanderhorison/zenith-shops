@@ -106,4 +106,24 @@ export class UserService {
     await this.userRepo.deleteAuthUser(userId)
     return true
   }
+  /**
+   * Update User Profile (Self-Service)
+   */
+  async updateUserProfile(userId: string, data: { full_name?: string }) {
+    return this.userRepo.updateProfile(userId, data)
+  }
+
+  /**
+   * Change Password (Self-Service)
+   * Note: This uses Admin client, which is fine for backend API routes.
+   * But we should be careful. Typical "Change Password" flows verify "Current Password" first.
+   * The repository's `updateAuthUser` just forces the update (Admin override).
+   * For self-service password change, we usually verify current password via `signInWithPassword` first.
+   * That verification logic belongs in the API route or a specialized Auth Service, not necessarily here.
+   * However, ONCE verified, we can use this to update.
+   */
+  async changePassword(userId: string, newPassword: string) {
+    return this.userRepo.updateAuthUser(userId, { password: newPassword })
+  }
 }
+

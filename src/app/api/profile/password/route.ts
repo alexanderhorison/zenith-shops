@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { userService } from '@/lib/di'
 
 export async function PUT(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     // Get the current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -31,18 +32,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Current password is incorrect' }, { status: 400 })
     }
 
-    // Update the password
-    const { error: updateError } = await supabase.auth.updateUser({
-      password: newPassword
-    })
-
-    if (updateError) {
-      console.error('Error updating password:', updateError)
+    // Update the password using Service
+    try {
+      await userService.changePassword(user.id, newPassword)
+    } catch (e: any) {
+      console.error('Error updating password:', e)
       return NextResponse.json({ error: 'Failed to update password' }, { status: 500 })
     }
 
-    return NextResponse.json({ 
-      message: 'Password updated successfully' 
+    return NextResponse.json({
+      message: 'Password updated successfully'
     })
   } catch (error) {
     console.error('Error in PUT /api/profile/password:', error)

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { userService } from '@/lib/di'
 
 export async function GET() {
   try {
@@ -12,25 +13,13 @@ export async function GET() {
     }
 
     // Get user profile with role information
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select(`
-        id,
-        user_id,
-        email,
-        full_name,
-        is_active,
-        role:roles(id, name, description)
-      `)
-      .eq('user_id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Error fetching user profile:', profileError)
+    try {
+      const profile = await userService.getUserById(user.id)
+      return NextResponse.json({ profile })
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
-
-    return NextResponse.json({ profile })
   } catch (error) {
     console.error('Error in GET /api/profile:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -53,26 +42,26 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Full name is required' }, { status: 400 })
     }
 
-    // Update the user profile
-    const { data: updatedProfile, error: updateError } = await supabase
-      .from('user_profiles')
-      .update({
-        full_name: full_name.trim(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', user.id)
-      .select(`
-        *,
-        role:roles(id, name, description)
-      `)
-      .single()
+    // Update the user profile using Service
+    const updatedProfile = await userService.updateUserProfile(user.id, {
+      full_name: full_name.trim()
+    })
 
-    if (updateError) {
-      console.error('Error updating profile:', updateError)
+    if (!updatedProfile) {
       return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
     }
 
-    // Also update the auth user metadata
+    // Also update the auth user metadata (we can keep this here or move to service eventually)
+    // For now, let's keep it here as it's specific to Auth maintenance, 
+    // OR we could use userService.updateUser which handles both?
+    // Let's use userService.updateUser! It handles both Profile and Auth updates!
+    // Wait, updateUser requires UserUpdateData.
+
+    // Actually, `userService.updateUser` does exactly what we want: updates profile AND auth (email/pass).
+    // But here we are updating metadata in Auth, not email/pass. 
+    // So `userService.updateUser` might NOT be enough for metadata.
+    // Let's stick to updating profile via service, and auth metadata manually until we improve service.
+
     const { error: authUpdateError } = await supabase.auth.updateUser({
       data: {
         full_name: full_name.trim()
@@ -81,12 +70,15 @@ export async function PUT(request: NextRequest) {
 
     if (authUpdateError) {
       console.error('Error updating auth user metadata:', authUpdateError)
-      // Don't fail the request if auth metadata update fails
     }
+
+    // We need to re-fetch the full profile with role to return it
+    // because updateProfile returns the row, but we want the nested role too.
+    const fullProfile = await userService.getUserById(user.id)
 
     return NextResponse.json({
       message: 'Profile updated successfully',
-      profile: updatedProfile
+      profile: fullProfile
     })
   } catch (error) {
     console.error('Error in PUT /api/profile:', error)
