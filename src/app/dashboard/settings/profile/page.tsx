@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { getToastTimestamp } from '@/lib/utils'
 
 interface UserProfile {
   id: string
@@ -25,32 +26,17 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string>('')
-  const [success, setSuccess] = useState<string>('')
 
   const [formData, setFormData] = useState({
     email: '',
     full_name: ''
   })
 
-  // Auto-dismiss messages after 5 seconds
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(''), 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [error])
-
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => setSuccess(''), 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [success])
 
   useEffect(() => {
     fetchProfile()
   }, [])
+
 
   const fetchProfile = async () => {
     try {
@@ -64,10 +50,10 @@ export default function ProfilePage() {
           full_name: data.profile.full_name || ''
         })
       } else {
-        setError('Failed to load profile')
+        toast.error('Failed to load profile')
       }
     } catch (err) {
-      setError('Failed to load profile')
+      toast.error('Failed to load profile')
     } finally {
       setLoading(false)
     }
@@ -76,8 +62,6 @@ export default function ProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    setError('')
-    setSuccess('')
 
     try {
       const response = await fetch('/api/profile', {
@@ -91,13 +75,15 @@ export default function ProfilePage() {
       const data = await response.json()
 
       if (response.ok) {
-        setSuccess('Profile updated successfully!')
+        toast.success('Profile updated successfully!', {
+          description: getToastTimestamp()
+        })
         setProfile(data.profile)
       } else {
-        setError(data.error || 'Failed to update profile')
+        toast.error(data.error || 'Failed to update profile')
       }
     } catch (err) {
-      setError('Failed to update profile')
+      toast.error('Failed to update profile')
     } finally {
       setSaving(false)
     }
@@ -159,29 +145,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Success Alert */}
-      {success && (
-        <div className="fixed top-6 right-6 max-w-md z-50">
-          <Alert className="bg-green-50 border-green-200 shadow-lg animate-in slide-in-from-top-5 duration-500 ease-out">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800">Success</AlertTitle>
-            <AlertDescription className="text-green-700">
-              {success}
-            </AlertDescription>
-          </Alert>
-        </div>
-      )}
 
-      {/* Error Alert */}
-      {error && (
-        <div className="fixed top-6 right-6 max-w-md z-50">
-          <Alert variant="destructive" className="shadow-lg border animate-in slide-in-from-top-5 duration-500 ease-out">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        </div>
-      )}
 
       {/* Profile Information Card */}
       <Card>

@@ -6,43 +6,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { getToastTimestamp } from '@/lib/utils'
 
 export default function ChangePasswordPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string>('')
-  const [success, setSuccess] = useState<string>('')
 
   const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   })
-
-  // Auto-dismiss messages after 5 seconds
+  // Simulate loading
   useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(''), 5000)
-      return () => clearTimeout(timer)
-    }
-  }, [error])
-
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => {
-        setSuccess('')
-        router.push('/dashboard')
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
-  }, [success, router])
-
-  useEffect(() => {
-    // Simulate loading
     const timer = setTimeout(() => setLoading(false), 500)
     return () => clearTimeout(timer)
   }, [])
@@ -50,23 +31,21 @@ export default function ChangePasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    setError('')
-    setSuccess('')
 
     if (formData.newPassword !== formData.confirmPassword) {
-      setError('New passwords do not match')
+      toast.error('New passwords do not match')
       setSaving(false)
       return
     }
 
     if (!formData.currentPassword || !formData.newPassword) {
-      setError('Please fill in all required fields')
+      toast.error('Please fill in all required fields')
       setSaving(false)
       return
     }
 
     if (formData.newPassword.length < 6) {
-      setError('New password must be at least 6 characters long')
+      toast.error('New password must be at least 6 characters long')
       setSaving(false)
       return
     }
@@ -84,17 +63,20 @@ export default function ChangePasswordPage() {
       const data = await response.json()
 
       if (response.ok) {
-        setSuccess('Password changed successfully! Redirecting...')
+        toast.success('Password changed successfully! Redirecting...', {
+          description: getToastTimestamp()
+        })
         setFormData({
           currentPassword: '',
           newPassword: '',
           confirmPassword: ''
         })
+        setTimeout(() => router.push('/dashboard'), 2000)
       } else {
-        setError(data.error || 'Failed to change password')
+        toast.error(data.error || 'Failed to change password')
       }
     } catch (err) {
-      setError('Failed to change password')
+      toast.error('Failed to change password')
     } finally {
       setSaving(false)
     }
@@ -160,29 +142,7 @@ export default function ChangePasswordPage() {
         </div>
       </div>
 
-      {/* Success Alert */}
-      {success && (
-        <div className="fixed top-6 right-6 max-w-md z-50">
-          <Alert className="bg-green-50 border-green-200 shadow-lg animate-in slide-in-from-top-5 duration-500 ease-out">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-800">Success</AlertTitle>
-            <AlertDescription className="text-green-700">
-              {success}
-            </AlertDescription>
-          </Alert>
-        </div>
-      )}
 
-      {/* Error Alert */}
-      {error && (
-        <div className="fixed top-6 right-6 max-w-md z-50">
-          <Alert variant="destructive" className="shadow-lg border animate-in slide-in-from-top-5 duration-500 ease-out">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        </div>
-      )}
 
       {/* Change Password Card */}
       <Card>
