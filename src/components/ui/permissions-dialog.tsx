@@ -205,7 +205,7 @@ export function PermissionsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[90vh] h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
 
         {/* Header */}
         <div className="p-6 pb-2">
@@ -224,7 +224,7 @@ export function PermissionsDialog({
           </DialogHeader>
         </div>
 
-        <ScrollArea className="h-[600px] px-6 py-2">
+        <ScrollArea className="flex-1 min-h-0 px-6 py-2">
           {loading ? (
             <div className="space-y-4 py-4">
               <div className="h-24 bg-muted rounded-lg animate-pulse" />
