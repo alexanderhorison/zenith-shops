@@ -33,60 +33,17 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
             }
 
             try {
-                const supabase = createClient()
-                const { data: { user } } = await supabase.auth.getUser()
+                // Fetch permissions from our secure API
+                const response = await fetch('/api/profile/permissions')
+                const data = await response.json()
 
-                if (!user) {
-                    setPermissions([])
-                    localStorage.removeItem('app_permissions')
-                    setIsLoading(false)
-                    return
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to fetch permissions')
                 }
 
-                // If we have cache, we still might want to verify it briefly or just trust it.
-                // The user explicitly asked for "just one time after login", so if we have cache, we stop.
-                if (cached) return;
-
-
-                // Fetch all permissions for the user directly
-                // Query path: user_profiles -> roles -> role_permissions -> permissions
-                const { data, error } = await supabase
-                    .from('user_profiles')
-                    .select(`
-            role:roles!inner (
-              role_permissions!inner (
-                permission:permissions!inner (
-                  code
-                )
-              )
-            )
-          `)
-                    .eq('user_id', user.id)
-
-                if (error) {
-                    console.error('Error fetching permissions:', error)
-                    setPermissions([])
-                } else if (data && data.length > 0) {
-                    // Parse the nested structure
-                    // Explicitly type the result to avoid 'unknown' errors
-                    const profile = data[0] as unknown as {
-                        role: {
-                            role_permissions: Array<{
-                                permission: {
-                                    code: string
-                                }
-                            }>
-                        }
-                    }
-
-                    if (profile?.role?.role_permissions) {
-                        const codes = profile.role.role_permissions
-                            .map(rp => rp.permission?.code)
-                            .filter(Boolean)
-
-                        setPermissions(codes)
-                        localStorage.setItem('app_permissions', JSON.stringify(codes))
-                    }
+                if (data.permissions) {
+                    setPermissions(data.permissions)
+                    localStorage.setItem('app_permissions', JSON.stringify(data.permissions))
                 }
             } catch (error) {
                 console.error('Error in permission provider:', error)
