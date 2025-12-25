@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { permissionService } from '@/lib/di'
 
@@ -34,6 +35,30 @@ export async function withPermission(
         return await handler()
     } catch (error) {
         console.error(`Error in secured route (${permissionCode}):`, error)
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
+}
+
+/**
+ * Higher-order helper to protect API routes requiring only Authentication.
+ * Passes the authenticated User object to the handler.
+ */
+export async function withAuth(
+    handler: (user: User) => Promise<NextResponse>
+): Promise<NextResponse> {
+    try {
+        const supabase = await createClient()
+
+        // 1. Authenticate User
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // 2. Run Handler
+        return await handler(user)
+    } catch (error) {
+        console.error('Error in authenticated route:', error)
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
 }

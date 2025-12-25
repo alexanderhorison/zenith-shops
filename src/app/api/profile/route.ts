@@ -1,18 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { userService } from '@/lib/di'
+import { withAuth } from '@/lib/api-guards'
+
 
 export async function GET() {
-  try {
-    const supabase = await createClient()
-
-    // Get the current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Get user profile with role information
+  return withAuth(async (user) => {
     try {
       const profile = await userService.getUserById(user.id)
       return NextResponse.json({ profile })
@@ -20,68 +13,61 @@ export async function GET() {
       console.error('Error fetching user profile:', error)
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
-  } catch (error) {
-    console.error('Error in GET /api/profile:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
+  })
 }
 
 export async function PUT(request: NextRequest) {
-  try {
-    const supabase = await createClient()
+  return withAuth(async (user) => {
+    try {
+      const { full_name } = await request.json()
 
-    // Get the current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { full_name } = await request.json()
-
-    if (!full_name || full_name.trim() === '') {
-      return NextResponse.json({ error: 'Full name is required' }, { status: 400 })
-    }
-
-    // Update the user profile using Service
-    const updatedProfile = await userService.updateUserProfile(user.id, {
-      full_name: full_name.trim()
-    })
-
-    if (!updatedProfile) {
-      return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
-    }
-
-    // Also update the auth user metadata (we can keep this here or move to service eventually)
-    // For now, let's keep it here as it's specific to Auth maintenance, 
-    // OR we could use userService.updateUser which handles both?
-    // Let's use userService.updateUser! It handles both Profile and Auth updates!
-    // Wait, updateUser requires UserUpdateData.
-
-    // Actually, `userService.updateUser` does exactly what we want: updates profile AND auth (email/pass).
-    // But here we are updating metadata in Auth, not email/pass. 
-    // So `userService.updateUser` might NOT be enough for metadata.
-    // Let's stick to updating profile via service, and auth metadata manually until we improve service.
-
-    const { error: authUpdateError } = await supabase.auth.updateUser({
-      data: {
-        full_name: full_name.trim()
+      if (!full_name || full_name.trim() === '') {
+        return NextResponse.json({ error: 'Full name is required' }, { status: 400 })
       }
-    })
 
-    if (authUpdateError) {
-      console.error('Error updating auth user metadata:', authUpdateError)
+      // Update the user profile using Service
+      const updatedProfile = await userService.updateUserProfile(user.id, {
+        full_name: full_name.trim()
+      })
+
+      if (!updatedProfile) {
+        return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 })
+      }
+
+      // Also update the auth user metadata
+      // Note: We still need a supabase client if we are calling auth.updateUser separately, 
+      // but userService.updateUser covers this logic. 
+      // However, to keep this refactor focused on "Authentication Check Rule", 
+      // we will use the same logic but wrapped in withAuth.
+      // But wait: `withAuth` gives us `user` object. It does NOT give us a `supabase` client.
+      // So we still need `createClient` if we want to call supbase directly for metadata.
+      // Optimization: Let's assume metadata update is secondary or handled by service if we switched fully.
+      // The previous code had explicit supabase call for metadata.
+      // Let's create a client just for that, OR better: move metadata update to `userService.updateUserProfile`?
+      // No, `updateUserProfile` as implemented only updates valid DB fields.
+      // Let's re-instantiate supabase client here for the metadata update. 
+      // It's a bit redundant but okay for now.
+
+      const supabase = await createClient()
+      const { error: authUpdateError } = await supabase.auth.updateUser({
+        data: {
+          full_name: full_name.trim()
+        }
+      })
+
+      if (authUpdateError) {
+        console.error('Error updating auth user metadata:', authUpdateError)
+      }
+
+      const fullProfile = await userService.getUserById(user.id)
+
+      return NextResponse.json({
+        message: 'Profile updated successfully',
+        profile: fullProfile
+      })
+    } catch (error) {
+      console.error('Error in PUT /api/profile:', error)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     }
-
-    // We need to re-fetch the full profile with role to return it
-    // because updateProfile returns the row, but we want the nested role too.
-    const fullProfile = await userService.getUserById(user.id)
-
-    return NextResponse.json({
-      message: 'Profile updated successfully',
-      profile: fullProfile
-    })
-  } catch (error) {
-    console.error('Error in PUT /api/profile:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
+  })
 }
