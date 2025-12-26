@@ -14,14 +14,16 @@ export interface UpdateCategoryDTO {
     name?: string
 }
 
+import { PaginationParams, PaginatedResult } from '@/types/pagination'
+
 export class CategoryService {
     constructor(private categoryRepo: ICategoryRepository) { }
 
     /**
      * Get all categories
      */
-    async getAllCategories() {
-        return this.categoryRepo.findAll()
+    async getAllCategories(params?: PaginationParams): Promise<PaginatedResult<any>> {
+        return this.categoryRepo.findAll(params)
     }
 
     /**

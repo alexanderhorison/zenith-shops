@@ -4,6 +4,8 @@ export const PERMISSIONS = {
         ROLES: 'menu.roles',
         CATEGORIES: 'menu.categories',
         PRODUCTS: 'menu.products',
+        CUSTOMERS: 'menu.customers',
+        ORDERS: 'menu.orders',
     },
     ACTIONS: {
         USERS: {
@@ -30,6 +32,14 @@ export const PERMISSIONS = {
             EDIT: 'action.products.edit',
             DELETE: 'action.products.delete',
         },
+        CUSTOMERS: {
+            VIEW: 'action.customers.view',
+            EDIT: 'action.customers.edit',
+            SUSPEND: 'action.customers.suspend',
+        },
+        ORDERS: {
+            VIEW: 'action.orders.view',
+        },
     },
 } as const;
 
@@ -39,4 +49,5 @@ export type PermissionCode =
     | typeof PERMISSIONS.ACTIONS.USERS[keyof typeof PERMISSIONS.ACTIONS.USERS]
     | typeof PERMISSIONS.ACTIONS.ROLES[keyof typeof PERMISSIONS.ACTIONS.ROLES]
     | typeof PERMISSIONS.ACTIONS.CATEGORIES[keyof typeof PERMISSIONS.ACTIONS.CATEGORIES]
-    | typeof PERMISSIONS.ACTIONS.PRODUCTS[keyof typeof PERMISSIONS.ACTIONS.PRODUCTS];
+    | typeof PERMISSIONS.ACTIONS.PRODUCTS[keyof typeof PERMISSIONS.ACTIONS.PRODUCTS]
+    | typeof PERMISSIONS.ACTIONS.CUSTOMERS[keyof typeof PERMISSIONS.ACTIONS.CUSTOMERS];

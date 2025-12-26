@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Plus, Pencil, Trash2, Package, ArrowUpDown, ShieldAlert } from "lucide-react"
+import { LoadingIconButton } from "@/components/loading-icon-button"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PermissionGuard } from "@/components/auth/PermissionGuard"
@@ -13,7 +14,8 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { getToastTimestamp } from "@/lib/utils"
 import { DataTable } from "@/components/ui/data-table"
-import { ColumnDef } from "@tanstack/react-table"
+import { ColumnDef, ColumnFiltersState, SortingState } from "@tanstack/react-table"
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface Category {
   id: number
@@ -32,6 +34,16 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true)
   const [deleteCategoryId, setDeleteCategoryId] = useState<number | null>(null)
   const toastShownRef = useRef(false)
+
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  })
+  const [rowCount, setRowCount] = useState(0)
+  const [globalFilter, setGlobalFilter] = useState("")
+  const debouncedSearch = useDebounce(globalFilter, 500)
 
   const supabase = createClient()
 
@@ -54,12 +66,34 @@ export default function CategoriesPage() {
     },
     {
       accessorKey: "description",
-      header: "Description",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Description
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => <div className="max-w-xs truncate">{row.getValue("description")}</div>,
     },
     {
       accessorKey: "slug",
-      header: "Slug",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Slug
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => (
         <code className="bg-muted px-2 py-1 rounded text-sm">
           {row.getValue("slug")}
@@ -68,7 +102,18 @@ export default function CategoriesPage() {
     },
     {
       accessorKey: "is_active",
-      header: "Status",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Status
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => {
         const isActive = row.getValue("is_active") as boolean
         return (
@@ -80,24 +125,32 @@ export default function CategoriesPage() {
     },
     {
       accessorKey: "created_at",
-      header: "Created",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Created
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => new Date(row.getValue("created_at")).toLocaleDateString(),
     },
     {
       id: "actions",
-      header: () => <div className="text-right">Actions</div>,
+      header: () => <div className="text-center">Actions</div>,
       cell: ({ row }) => {
         const category = row.original
         return (
-          <div className="text-right space-x-2">
+          <div className="flex items-center justify-center gap-2">
             <PermissionGuard permission="action.categories.edit">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/dashboard/admin/categories/${category.id}/edit`)}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
+              <LoadingIconButton
+                url={`/dashboard/admin/categories/${category.id}/edit`}
+                icon={<Pencil className="h-4 w-4" />}
+              />
             </PermissionGuard>
             <PermissionGuard permission="action.categories.delete">
               <Button
@@ -117,7 +170,9 @@ export default function CategoriesPage() {
 
   useEffect(() => {
     fetchCategories()
+  }, [pagination.pageIndex, pagination.pageSize, debouncedSearch, sorting])
 
+  useEffect(() => {
     // Check for success message from redirection (only show once)
     if (searchParams.get('success') === 'created' && !toastShownRef.current) {
       toastShownRef.current = true
@@ -130,45 +185,31 @@ export default function CategoriesPage() {
   }, [searchParams, router])
 
   const fetchCategories = async () => {
+    setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('created_at', { ascending: false })
+      const params = new URLSearchParams()
+      params.set('page', (pagination.pageIndex + 1).toString())
+      params.set('limit', pagination.pageSize.toString())
 
-      if (error) {
-        console.error('Error fetching categories:', error.message || error)
-        // Fallback to mock data if database isn't ready
-        const mockCategories: Category[] = [
-          {
-            id: 1,
-            name: "Espresso",
-            description: "Rich and bold espresso-based beverages",
-            slug: "espresso",
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: 2,
-            name: "Latte",
-            description: "Creamy milk-based coffee drinks",
-            slug: "latte",
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ]
-        setCategories(mockCategories)
-        toast.error('Using mock data', {
-          description: 'Could not fetch categories from database',
-        })
-      } else {
-        setCategories(data || [])
+      if (debouncedSearch) {
+        params.set('search', debouncedSearch)
       }
-      setLoading(false)
+
+      if (sorting.length > 0) {
+        params.set('sortBy', sorting[0].id)
+        params.set('sortOrder', sorting[0].desc ? 'desc' : 'asc')
+      }
+
+      const response = await fetch(`/api/admin/categories?${params.toString()}`)
+      if (!response.ok) throw new Error('Failed to fetch categories')
+
+      const data = await response.json()
+      setCategories(data.data)
+      setRowCount(data.meta.total)
     } catch (error) {
       console.error("Error fetching categories:", error)
+      toast.error('Failed to load categories')
+    } finally {
       setLoading(false)
     }
   }
@@ -267,7 +308,7 @@ export default function CategoriesPage() {
               Categories Overview
             </CardTitle>
             <CardDescription>
-              {categories.length} total categories • {categories.filter(c => c.is_active).length} active
+              Manage product categories.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -276,6 +317,13 @@ export default function CategoriesPage() {
               data={categories}
               searchKey="name"
               searchPlaceholder="Search categories..."
+              rowCount={rowCount}
+              pagination={pagination}
+              onPaginationChange={setPagination}
+              sorting={sorting}
+              onSortingChange={setSorting}
+              globalFilter={globalFilter}
+              onGlobalFilterChange={setGlobalFilter}
             />
           </CardContent>
         </Card >

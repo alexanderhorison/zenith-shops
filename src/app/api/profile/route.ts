@@ -8,7 +8,16 @@ export async function GET() {
   return withAuth(async (user) => {
     try {
       const profile = await userService.getUserById(user.id)
-      return NextResponse.json({ profile })
+
+      // Return both auth user and profile in one response
+      return NextResponse.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          created_at: user.created_at,
+        },
+        profile
+      })
     } catch (error) {
       console.error('Error fetching user profile:', error)
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })

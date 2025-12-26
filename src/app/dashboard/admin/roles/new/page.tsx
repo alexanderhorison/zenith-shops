@@ -12,7 +12,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ArrowLeft, Loader2, AlertCircle, Menu, Settings, Shield } from "lucide-react"
+import { ArrowLeft, Loader2, AlertCircle, Menu, Settings, Shield, ChevronDown } from "lucide-react"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 interface Permission {
   id: number
@@ -33,6 +38,7 @@ export default function NewRolePage() {
   })
   const [allPermissions, setAllPermissions] = useState<Permission[]>([])
   const [selectedPermissions, setSelectedPermissions] = useState<Set<number>>(new Set())
+  const [expandedMenus, setExpandedMenus] = useState<Set<number>>(new Set())
 
   // Derived state
   const menuPermissions = allPermissions.filter(p => p.category === 'menu')
@@ -68,9 +74,19 @@ export default function NewRolePage() {
     }
   }
 
+  const toggleMenuExpand = (menuId: number) => {
+    const newExpanded = new Set(expandedMenus)
+    if (newExpanded.has(menuId)) {
+      newExpanded.delete(menuId)
+    } else {
+      newExpanded.add(menuId)
+    }
+    setExpandedMenus(newExpanded)
+  }
+
   const handleMenuChange = (menuId: number, checked: boolean) => {
     const newSelected = new Set(selectedPermissions)
-    
+
     if (checked) {
       newSelected.add(menuId)
       // Select all actions for this menu
@@ -82,13 +98,13 @@ export default function NewRolePage() {
       const actions = menuCodeToActions[menuId] || []
       actions.forEach(a => newSelected.delete(a.id))
     }
-    
+
     setSelectedPermissions(newSelected)
   }
 
   const handleActionChange = (actionId: number, menuId: number, checked: boolean) => {
     const newSelected = new Set(selectedPermissions)
-    
+
     if (checked) {
       newSelected.add(actionId)
       newSelected.add(menuId) // Auto-select menu
@@ -96,7 +112,7 @@ export default function NewRolePage() {
       newSelected.delete(actionId)
       // Do not deselect menu
     }
-    
+
     setSelectedPermissions(newSelected)
   }
 
@@ -230,15 +246,29 @@ export default function NewRolePage() {
               <CardTitle>Permissions</CardTitle>
             </div>
             <CardDescription>
-               Select which menus and actions this role can access (actions appear under each menu)
+              Select which menus and actions this role can access (actions appear under each menu)
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between mb-4">
-               {/* Optional: Add global select all if needed, but not requested */}
-               <Badge variant="secondary">
-                 {selectedPermissions.size} selected
-               </Badge>
+              {/* Optional: Add global select all if needed, but not requested */}
+              <Badge variant="secondary">
+                {Array.from(selectedPermissions).reduce((count, id) => {
+                  const perm = allPermissions.find(p => p.id === id)
+                  if (!perm) return count
+
+                  if (perm.category === 'action') {
+                    return count + 1
+                  }
+
+                  if (perm.category === 'menu') {
+                    const hasActions = (menuCodeToActions[perm.id]?.length || 0) > 0
+                    return hasActions ? count : count + 1
+                  }
+
+                  return count
+                }, 0)} selected
+              </Badge>
             </div>
 
             {loadingPermissions ? (
@@ -248,61 +278,76 @@ export default function NewRolePage() {
                 <div className="h-12 bg-muted rounded animate-pulse" />
               </div>
             ) : (
-              <ScrollArea className="h-[400px] rounded-md border p-4">
-                <div className="space-y-6">
+              <ScrollArea className="rounded-md">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1 items-start">
                   {menuPermissions.map(menu => (
-                    <div key={menu.id} className="mb-6">
-                      <div className="flex items-start space-x-3 rounded-lg border p-3 hover:bg-accent/50 bg-accent/10">
+                    <Collapsible
+                      key={menu.id}
+                      open={expandedMenus.has(menu.id)}
+                      onOpenChange={() => toggleMenuExpand(menu.id)}
+                      className="border rounded-lg p-4"
+                    >
+                      <div className="flex items-start space-x-3 mb-1">
                         <Checkbox
                           id={`menu-${menu.id}`}
                           checked={selectedPermissions.has(menu.id)}
                           onCheckedChange={(checked) => handleMenuChange(menu.id, checked as boolean)}
                           disabled={saving}
+                          className="mt-1"
+                          onClick={(e) => e.stopPropagation()}
                         />
                         <div className="flex-1">
-                          <Label
-                            htmlFor={`menu-${menu.id}`}
-                            className="text-sm font-medium leading-none cursor-pointer"
-                          >
-                            {menu.name}
-                          </Label>
+                          <CollapsibleTrigger className="flex items-center justify-between w-full hover:text-accent-foreground/80 text-left">
+                            <Label
+                              htmlFor={`menu-${menu.id}`}
+                              className="text-sm font-medium leading-none cursor-pointer"
+                              onClick={(e) => e.preventDefault()}
+                            >
+                              {menu.name}
+                            </Label>
+                            {menuCodeToActions[menu.id]?.length > 0 && (
+                              <ChevronDown className={`h-4 w-4 transition-transform ${expandedMenus.has(menu.id) ? 'rotate-180' : ''}`} />
+                            )}
+                          </CollapsibleTrigger>
                           {menu.description && (
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <p className="text-xs text-muted-foreground mt-1 pr-6">
                               {menu.description}
                             </p>
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Actions List */}
                       {menuCodeToActions[menu.id]?.length > 0 && (
-                        <div className="ml-8 mt-2 space-y-2 border-l-2 pl-4 border-muted">
-                          {menuCodeToActions[menu.id].map(action => (
-                            <div key={action.id} className="flex items-start space-x-3 rounded-lg border p-3 hover:bg-accent transition-colors">
-                              <Checkbox
-                                id={`action-${action.id}`}
-                                checked={selectedPermissions.has(action.id)}
-                                onCheckedChange={(checked) => handleActionChange(action.id, menu.id, checked as boolean)}
-                                disabled={saving}
-                              />
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor={`action-${action.id}`}
-                                  className="text-sm font-medium leading-none cursor-pointer"
-                                >
-                                  {action.name}
-                                </Label>
-                                {action.description && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {action.description}
-                                  </p>
-                                )}
+                        <CollapsibleContent>
+                          <div className="ml-8 mt-4 space-y-2 border-l-2 pl-4 border-muted">
+                            {menuCodeToActions[menu.id].map(action => (
+                              <div key={action.id} className="flex items-start space-x-3 rounded-lg border p-3 hover:bg-accent transition-colors">
+                                <Checkbox
+                                  id={`action-${action.id}`}
+                                  checked={selectedPermissions.has(action.id)}
+                                  onCheckedChange={(checked) => handleActionChange(action.id, menu.id, checked as boolean)}
+                                  disabled={saving}
+                                />
+                                <div className="flex-1">
+                                  <Label
+                                    htmlFor={`action-${action.id}`}
+                                    className="text-sm font-medium leading-none cursor-pointer"
+                                  >
+                                    {action.name}
+                                  </Label>
+                                  {action.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {action.description}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        </CollapsibleContent>
                       )}
-                    </div>
+                    </Collapsible>
                   ))}
                 </div>
               </ScrollArea>

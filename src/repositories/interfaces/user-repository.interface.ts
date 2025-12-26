@@ -23,8 +23,10 @@ export interface User {
     }
 }
 
+import { PaginationParams, PaginatedResult } from '@/types/pagination'
+
 export interface IUserRepository {
-    findAll(): Promise<User[]>
+    findAll(params?: PaginationParams): Promise<PaginatedResult<User>>
     findById(id: string): Promise<User | null>
     createAuthUser(data: { email: string, password?: string, full_name: string }): Promise<{ user: { id: string } }>
     deleteAuthUser(id: string): Promise<void>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Pencil, Trash2, Shield, ArrowUpDown, Key, ShieldAlert } from "lucide-react"
+import { LoadingIconButton } from "@/components/loading-icon-button"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PermissionGuard } from "@/components/auth/PermissionGuard"
@@ -13,7 +14,8 @@ import { PermissionsDialog } from "@/components/ui/permissions-dialog"
 import { getToastTimestamp } from "@/lib/utils"
 import { toast } from "sonner"
 import { DataTable } from "@/components/ui/data-table"
-import { ColumnDef } from "@tanstack/react-table"
+import { ColumnDef, SortingState } from "@tanstack/react-table"
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface Role {
   id: number
@@ -29,6 +31,16 @@ export default function RoleManagementPage() {
   const [deleteRoleId, setDeleteRoleId] = useState<number | null>(null)
   const [permissionsDialogOpen, setPermissionsDialogOpen] = useState(false)
   const [selectedRoleForPermissions, setSelectedRoleForPermissions] = useState<Role | null>(null)
+
+  // Server-side state
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  })
+  const [rowCount, setRowCount] = useState(0)
+  const [globalFilter, setGlobalFilter] = useState("")
+  const debouncedSearch = useDebounce(globalFilter, 500)
 
   // Column definitions for the DataTable
   const columns: ColumnDef<Role>[] = [
@@ -59,7 +71,18 @@ export default function RoleManagementPage() {
     },
     {
       accessorKey: "description",
-      header: "Description",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Description
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => {
         const description = row.getValue("description") as string
         return <div className="max-w-md truncate text-muted-foreground">{description}</div>
@@ -86,11 +109,11 @@ export default function RoleManagementPage() {
     },
     {
       id: "actions",
-      header: () => <div className="text-right">Actions</div>,
+      header: () => <div className="text-center">Actions</div>,
       cell: ({ row }) => {
         const role = row.original
         return (
-          <div className="flex items-center justify-end gap-2 text-right">
+          <div className="flex items-center justify-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -104,15 +127,11 @@ export default function RoleManagementPage() {
               <Key className="h-4 w-4 text-amber-500" />
             </Button>
             <PermissionGuard permission="action.roles.edit">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/dashboard/admin/roles/${role.id}/edit`)}
+              <LoadingIconButton
+                url={`/dashboard/admin/roles/${role.id}/edit`}
                 title="Edit Role"
-                className="h-8 w-8 p-0"
-              >
-                <Pencil className="h-4 w-4 text-blue-500" />
-              </Button>
+                icon={<Pencil className="h-4 w-4 text-blue-500" />}
+              />
             </PermissionGuard>
             <PermissionGuard permission="action.roles.delete">
               <Button
@@ -132,26 +151,39 @@ export default function RoleManagementPage() {
   ]
 
   const fetchRoles = async () => {
+    setLoading(true)
     try {
-      const response = await fetch('/api/admin/roles')
-      const data = await response.json()
-      if (response.ok) {
-        setRoles(data.roles || [])
-      } else {
-        console.error('Failed to fetch roles:', data.error)
+      const params = new URLSearchParams()
+      params.set('page', (pagination.pageIndex + 1).toString())
+      params.set('limit', pagination.pageSize.toString())
+
+      if (debouncedSearch) {
+        params.set('search', debouncedSearch)
       }
+
+      if (sorting.length > 0) {
+        params.set('sortBy', sorting[0].id)
+        params.set('sortOrder', sorting[0].desc ? 'desc' : 'asc')
+      }
+
+      const response = await fetch(`/api/admin/roles?${params.toString()}`)
+
+      if (!response.ok) throw new Error('Failed to fetch roles')
+
+      const data = await response.json()
+      setRoles(data.data)
+      setRowCount(data.meta.total)
     } catch (error) {
       console.error('Error fetching roles:', error)
+      toast.error('Error connecting to server')
+    } finally {
+      setLoading(false)
     }
   }
 
   useEffect(() => {
-    const loadData = async () => {
-      await fetchRoles()
-      setLoading(false)
-    }
-    loadData()
-  }, [])
+    fetchRoles()
+  }, [pagination.pageIndex, pagination.pageSize, debouncedSearch, sorting])
 
   const confirmDelete = async () => {
     if (!deleteRoleId) return
@@ -241,9 +273,12 @@ export default function RoleManagementPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Roles</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Roles Overview
+            </CardTitle>
             <CardDescription>
-              A list of all roles in the system
+              Manage system roles.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -252,6 +287,13 @@ export default function RoleManagementPage() {
               data={roles}
               searchKey="name"
               searchPlaceholder="Search roles..."
+              rowCount={rowCount}
+              pagination={pagination}
+              onPaginationChange={setPagination}
+              sorting={sorting}
+              onSortingChange={setSorting}
+              globalFilter={globalFilter}
+              onGlobalFilterChange={setGlobalFilter}
             />
           </CardContent>
         </Card>

@@ -1,19 +1,52 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { IProductRepository, Product } from '../interfaces/product-repository.interface'
+import { PaginationParams, PaginatedResult, createPaginatedResult } from '@/types/pagination'
 
 export class SupabaseProductRepository implements IProductRepository {
-    async findAll(): Promise<Product[]> {
+    async findAll(params?: PaginationParams): Promise<PaginatedResult<Product>> {
         const supabase = createAdminClient()
-        const { data, error } = await supabase
+        const page = params?.page || 1
+        const limit = params?.limit || 10
+        const offset = (page - 1) * limit
+
+        let query = supabase
             .from('products')
             .select(`
                 *,
                 category:categories(id, name)
-            `)
-            .order('name', { ascending: true })
+            `, { count: 'exact' })
+
+        // 1. Search (Name)
+        if (params?.search) {
+            query = query.ilike('name', `%${params.search}%`)
+        }
+
+        // 2. Filters
+        if (params?.filters) {
+            if (params.filters.category_id && params.filters.category_id !== 'all') {
+                query = query.eq('category_id', params.filters.category_id)
+            }
+            if (params.filters.is_available !== undefined && params.filters.is_available !== 'all') {
+                query = query.eq('is_available', params.filters.is_available === 'true')
+            }
+        }
+
+        // 3. Sorting
+        if (params?.sortBy) {
+            if (params.sortBy === 'category') {
+                query = query.order('name', { foreignTable: 'categories', ascending: params.sortOrder === 'asc' })
+            } else {
+                query = query.order(params.sortBy, { ascending: params.sortOrder === 'asc' })
+            }
+        } else {
+            query = query.order('name', { ascending: true })
+        }
+
+        // 4. Pagination
+        const { data, count, error } = await query.range(offset, offset + limit - 1)
 
         if (error) throw new Error(error.message)
-        return data as unknown as Product[]
+        return createPaginatedResult(data as unknown as Product[], count || 0, page, limit)
     }
 
     async findById(id: string): Promise<Product | null> {

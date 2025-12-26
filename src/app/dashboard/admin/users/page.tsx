@@ -1,14 +1,17 @@
 "use client"
 
 
-import { useState, useEffect } from "react"
+import { useRef, useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { PermissionGuard } from "@/components/auth/PermissionGuard"
 import { ShieldAlert } from "lucide-react"
 import {
   ColumnDef,
   ColumnFiltersState,
+  SortingState
 } from "@tanstack/react-table"
+import { useDebounce } from "@/hooks/use-debounce"
+import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -25,8 +28,13 @@ import {
   Plus,
   Pencil,
   Trash2,
-  ArrowUpDown
+  ArrowUpDown,
+  Users
 } from "lucide-react"
+
+
+import { LoadingIconButton } from "@/components/loading-icon-button"
+
 import { getToastTimestamp } from "@/lib/utils"
 import { toast } from "sonner"
 import { DataTable } from "@/components/ui/data-table"
@@ -51,9 +59,20 @@ export default function UserManagementPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [users, setUsers] = useState<User[]>([])
+  const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
+
+  // Server-side state
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  })
+  const [rowCount, setRowCount] = useState(0)
+  const [globalFilter, setGlobalFilter] = useState("")
+  const debouncedSearch = useDebounce(globalFilter, 500)
 
   const columns: ColumnDef<User>[] = [
     {
@@ -90,7 +109,18 @@ export default function UserManagementPage() {
     },
     {
       accessorKey: "role",
-      header: "Role",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Role
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => {
         const role = row.original.role
         const roleColor = role?.name === 'super_admin' ? 'destructive' :
@@ -101,15 +131,21 @@ export default function UserManagementPage() {
           </Badge>
         )
       },
-      filterFn: (row, id, value) => {
-        if (value === "all_roles") return true
-        const role = row.original.role
-        return role?.name === value
-      },
     },
     {
       accessorKey: "is_active",
-      header: "Status",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Status
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => {
         const isActive = row.getValue("is_active") as boolean
         return (
@@ -118,33 +154,35 @@ export default function UserManagementPage() {
           </Badge>
         )
       },
-      filterFn: (row, id, value) => {
-        if (value === "all_status") return true
-        const isActive = row.getValue("is_active") as boolean
-        return isActive.toString() === value
-      },
     },
     {
       accessorKey: "created_at",
-      header: "Created",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Created
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => new Date(row.getValue("created_at")).toLocaleDateString(),
     },
     {
       id: "actions",
-      header: () => <div className="text-right">Actions</div>,
+      header: () => <div className="text-center">Actions</div>,
       cell: ({ row }) => {
         const user = row.original
         return (
-          <div className="flex items-center justify-end gap-2 text-right">
+          <div className="flex items-center justify-center gap-2">
             <PermissionGuard permission="action.users.edit">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/dashboard/admin/users/${user.user_id}/edit`)}
-                className="h-8 w-8 p-0"
-              >
-                <Pencil className="h-4 w-4 text-blue-500" />
-              </Button>
+              <LoadingIconButton
+                url={`/dashboard/admin/users/${user.user_id}/edit`}
+                icon={<Pencil className="h-4 w-4 text-blue-500" />}
+              />
             </PermissionGuard>
             <PermissionGuard permission="action.users.delete">
               <Button
@@ -163,28 +201,76 @@ export default function UserManagementPage() {
   ]
 
   const fetchUsers = async () => {
+    if (users.length > 0) {
+      // Only set loading if not initial fetch to avoid flash
+      // But for now let's keep it simple
+    }
+    console.log('Fetching users with params:', {
+      pageIndex: pagination.pageIndex,
+      pageSize: pagination.pageSize,
+      debouncedSearch,
+      sorting,
+      columnFilters
+    })
+    setLoading(true)
     try {
-      const response = await fetch('/api/admin/users')
-      const data = await response.json()
-      if (response.ok) {
-        setUsers(data.users || [])
-      } else {
-        console.error('Failed to fetch users:', data.error)
-        toast.error('Failed to fetch users')
+      const params = new URLSearchParams()
+      params.set('page', (pagination.pageIndex + 1).toString())
+      params.set('limit', pagination.pageSize.toString())
+
+      if (debouncedSearch) {
+        params.set('search', debouncedSearch)
       }
+
+      if (sorting.length > 0) {
+        params.set('sortBy', sorting[0].id)
+        params.set('sortOrder', sorting[0].desc ? 'desc' : 'asc')
+      }
+
+      columnFilters.forEach(filter => {
+        if (filter.value !== undefined) {
+          params.set(filter.id, filter.value as string)
+        }
+      })
+
+      const response = await fetch(`/api/admin/users?${params.toString()}`)
+      if (!response.ok) throw new Error('Failed to fetch users')
+
+      const data = await response.json()
+      setUsers(data.data)
+      setRowCount(data.meta.total)
     } catch (error) {
       console.error('Error fetching users:', error)
       toast.error('Error connecting to server')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchRoles = async () => {
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('roles')
+        .select('id, name, description')
+        .order('name')
+
+      if (error) throw error
+      setRoles(data || [])
+    } catch (error) {
+      console.error('Error fetching roles:', error)
     }
   }
 
   useEffect(() => {
-    const loadData = async () => {
-      await fetchUsers()
-      setLoading(false)
-    }
-    loadData()
+    fetchRoles()
+  }, [])
 
+  useEffect(() => {
+    fetchUsers()
+  }, [pagination.pageIndex, pagination.pageSize, debouncedSearch, sorting, columnFilters])
+
+  useEffect(() => {
     if (searchParams.get('success') === 'created') {
       toast.success('User created successfully', {
         description: getToastTimestamp(),
@@ -217,12 +303,11 @@ export default function UserManagementPage() {
     }
   }
 
-  const uniqueRoles = Array.from(new Set(users.map(user => user.role?.name).filter(Boolean))) as string[]
-
-  const roleFilterValue = (columnFilters.find((f) => f.id === "role")?.value as string) || "all_roles"
+  const roleFilterValue = (columnFilters.find((f) => f.id === "role_id")?.value as string) || "all_roles"
   const statusFilterValue = (columnFilters.find((f) => f.id === "is_active")?.value as string) || "all_status"
 
   if (loading) {
+    // ... (keep loading skeleton)
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -277,9 +362,12 @@ export default function UserManagementPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Users Overview</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Users Overview
+            </CardTitle>
             <CardDescription>
-              Manage and monitor user accounts and their assigned roles
+              Manage users and roles.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -288,6 +376,13 @@ export default function UserManagementPage() {
               data={users}
               searchKey="email"
               searchPlaceholder="Search by email..."
+              rowCount={rowCount}
+              pagination={pagination}
+              onPaginationChange={setPagination}
+              sorting={sorting}
+              onSortingChange={setSorting}
+              globalFilter={globalFilter}
+              onGlobalFilterChange={setGlobalFilter}
               columnFilters={columnFilters}
               onColumnFiltersChange={setColumnFilters}
             >
@@ -295,9 +390,9 @@ export default function UserManagementPage() {
                 <Select
                   value={roleFilterValue}
                   onValueChange={(value) => {
-                    const newFilters = columnFilters.filter((f) => f.id !== "role")
+                    const newFilters = columnFilters.filter((f) => f.id !== "role_id")
                     if (value !== "all_roles") {
-                      newFilters.push({ id: "role", value })
+                      newFilters.push({ id: "role_id", value })
                     }
                     setColumnFilters(newFilters)
                   }}
@@ -307,9 +402,9 @@ export default function UserManagementPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all_roles">All Roles</SelectItem>
-                    {uniqueRoles.map((role) => (
-                      <SelectItem key={role} value={role}>
-                        <span className="capitalize">{role.replace('_', ' ')}</span>
+                    {roles.map((role) => (
+                      <SelectItem key={role.id} value={role.id.toString()}>
+                        <span className="capitalize">{role.name.replace('_', ' ')}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -339,6 +434,7 @@ export default function UserManagementPage() {
           </CardContent>
         </Card>
 
+        {/* Delete Dialog */}
         <ConfirmDialog
           open={deleteUserId !== null}
           onOpenChange={(open) => !open && setDeleteUserId(null)}

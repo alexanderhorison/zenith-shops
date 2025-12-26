@@ -3,7 +3,8 @@
 import { Coffee, LogOut, ChevronDown, User as UserIcon, Lock } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
+import Link from "next/link"
+import { useEffect, useState, useRef } from "react"
 
 
 import {
@@ -70,26 +71,64 @@ export default function DashboardLayout({
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
+  const hasFetchedProfile = useRef(false)
 
   useEffect(() => {
+    // Only fetch once per mount
+    if (hasFetchedProfile.current) {
+      setLoading(false)
+      return
+    }
+    hasFetchedProfile.current = true
+
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+      const CACHE_KEY = 'app_user_profile'
+      const CACHE_TIME_KEY = 'app_user_profile_timestamp'
+      const CACHE_EXPIRATION = 10 * 60 * 1000 // 10 minutes
 
-      if (user) {
-        // Get user profile with role
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select(`
-            *,
-            role:roles(name, description)
-          `)
-          .eq('user_id', user.id)
-          .single()
+      const cached = localStorage.getItem(CACHE_KEY)
+      const cachedTimestamp = localStorage.getItem(CACHE_TIME_KEY)
+      const now = Date.now()
 
-        console.log('Profile data:', profile) // Debug log
-        setUserProfile(profile)
+      // Try to use cache if it's not expired
+      if (cached && cachedTimestamp) {
+        try {
+          const parsed = JSON.parse(cached)
+          const timestamp = parseInt(cachedTimestamp)
+
+          if (now - timestamp < CACHE_EXPIRATION) {
+            // Cache is fresh, use it
+            setUser(parsed.user)
+            setUserProfile(parsed.profile)
+            setLoading(false)
+            return
+          }
+        } catch (e) {
+          console.error('Error parsing cached profile', e)
+          localStorage.removeItem(CACHE_KEY)
+          localStorage.removeItem(CACHE_TIME_KEY)
+        }
       }
+
+      // Cache miss or expired, fetch fresh data from unified endpoint
+      try {
+        const response = await fetch('/api/profile')
+        if (!response.ok) {
+          throw new Error('Failed to fetch profile')
+        }
+
+        const data = await response.json()
+
+        setUser(data.user)
+        setUserProfile(data.profile)
+
+        // Update cache
+        localStorage.setItem(CACHE_KEY, JSON.stringify(data))
+        localStorage.setItem(CACHE_TIME_KEY, now.toString())
+      } catch (error) {
+        console.error('Error fetching profile:', error)
+      }
+
       setLoading(false)
     }
     getUser()
@@ -98,6 +137,9 @@ export default function DashboardLayout({
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     localStorage.removeItem('app_permissions')
+    localStorage.removeItem('app_permissions_timestamp')
+    localStorage.removeItem('app_user_profile')
+    localStorage.removeItem('app_user_profile_timestamp')
     router.push("/login")
     router.refresh()
   }
@@ -216,10 +258,10 @@ function LayoutContent({
                               asChild
                               isActive={item.url === '/dashboard' ? pathname === item.url : pathname.startsWith(item.url)}
                             >
-                              <a href={item.url}>
+                              <Link href={item.url} className="flex items-center gap-2">
                                 <item.icon />
                                 <span>{item.title}</span>
-                              </a>
+                              </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         ))}

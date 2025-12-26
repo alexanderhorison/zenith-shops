@@ -5,7 +5,8 @@ export type MenuPermission =
   | 'menu.users'
   | 'menu.roles'
   | 'menu.categories'
-  | 'menu.products';
+  | 'menu.products'
+  | 'menu.customers';
 
 export type ActionPermission =
   | 'action.users.view'
@@ -23,7 +24,10 @@ export type ActionPermission =
   | 'action.products.view'
   | 'action.products.create'
   | 'action.products.edit'
-  | 'action.products.delete';
+  | 'action.products.delete'
+  | 'action.customers.view'
+  | 'action.customers.edit'
+  | 'action.customers.suspend';
 
 export type Permission = MenuPermission | ActionPermission;
 

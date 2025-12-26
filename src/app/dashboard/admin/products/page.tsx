@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Plus, Pencil, Trash2, Coffee, Banknote, Package, ArrowUpDown, ShieldAlert } from "lucide-react"
+import { LoadingIconButton } from "@/components/loading-icon-button"
+
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PermissionGuard } from "@/components/auth/PermissionGuard"
@@ -13,7 +15,8 @@ import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import { getToastTimestamp } from "@/lib/utils"
 import { DataTable } from "@/components/ui/data-table"
-import { ColumnDef } from "@tanstack/react-table"
+import { ColumnDef, ColumnFiltersState, SortingState } from "@tanstack/react-table"
+import { useDebounce } from "@/hooks/use-debounce"
 
 interface Product {
   id: number
@@ -21,7 +24,10 @@ interface Product {
   description: string
   price: number
   category_id: number
-  category_name: string
+  category?: {
+    id: number
+    name: string
+  }
   image_url: string
   is_available: boolean
   created_at: string
@@ -41,6 +47,15 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [deleteProductId, setDeleteProductId] = useState<number | null>(null)
   const toastShownRef = useRef(false)
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 10,
+  })
+  const [rowCount, setRowCount] = useState(0)
+  const [globalFilter, setGlobalFilter] = useState("")
+  const debouncedSearch = useDebounce(globalFilter, 500)
 
   const supabase = createClient()
 
@@ -72,13 +87,42 @@ export default function ProductsPage() {
       },
     },
     {
-      accessorKey: "category_name",
-      header: "Category",
-      cell: ({ row }) => <Badge variant="outline">{row.getValue("category_name")}</Badge>,
+      id: "category",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Category
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
+      cell: ({ row }) => {
+        const category = row.original.category
+        return (
+          <Badge variant="outline">
+            {category?.name || "Uncategorized"}
+          </Badge>
+        )
+      },
     },
     {
       accessorKey: "price",
-      header: "Price",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Price
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => {
         const price = parseFloat(row.getValue("price"))
         const formatted = new Intl.NumberFormat("id-ID", {
@@ -91,7 +135,18 @@ export default function ProductsPage() {
     },
     {
       accessorKey: "is_available",
-      header: "Status",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Status
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => {
         const isAvailable = row.getValue("is_available") as boolean
         return (
@@ -103,24 +158,32 @@ export default function ProductsPage() {
     },
     {
       accessorKey: "created_at",
-      header: "Created",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="h-8 p-0 font-semibold"
+          >
+            Created
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => new Date(row.getValue("created_at")).toLocaleDateString(),
     },
     {
       id: "actions",
-      header: () => <div className="text-right">Actions</div>,
+      header: () => <div className="text-center">Actions</div>,
       cell: ({ row }) => {
         const product = row.original
         return (
-          <div className="text-right space-x-2">
+          <div className="flex items-center justify-center gap-2">
             <PermissionGuard permission="action.products.edit">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push(`/dashboard/admin/products/${product.id}/edit`)}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
+              <LoadingIconButton
+                url={`/dashboard/admin/products/${product.id}/edit`}
+                icon={<Pencil className="h-4 w-4" />}
+              />
             </PermissionGuard>
             <PermissionGuard permission="action.products.delete">
               <Button
@@ -140,75 +203,60 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchData()
+  }, [pagination.pageIndex, pagination.pageSize, debouncedSearch, sorting, columnFilters])
 
-    // Check for success message from redirection (only show once)
+  useEffect(() => {
     if (searchParams.get('success') === 'created' && !toastShownRef.current) {
       toastShownRef.current = true
       toast.success('Product created successfully', {
         description: getToastTimestamp(),
       })
-      // Clean up the URL
       router.replace('/dashboard/admin/products')
     }
   }, [searchParams, router])
 
   const fetchData = async () => {
+    setLoading(true)
     try {
-      // Fetch categories
-      const { data: categoriesData, error: categoriesError } = await supabase
-        .from('categories')
-        .select('id, name')
-        .eq('is_active', true)
-        .order('name')
-
-      // Fetch products with category names
-      const { data: productsData, error: productsError } = await supabase
-        .from('products_with_categories')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (categoriesError || productsError) {
-        console.error('Database error, using mock data:', { categoriesError, productsError })
-        // Fallback to mock data
-        const mockCategories: Category[] = [
-          { id: 1, name: "Espresso" },
-          { id: 2, name: "Latte" },
-          { id: 3, name: "Cold Brew" },
-          { id: 4, name: "Pastries" },
-        ]
-
-        const mockProducts: Product[] = [
-          {
-            id: 1,
-            name: "Americano",
-            description: "Rich espresso diluted with hot water for a smooth, bold flavor",
-            price: 3.50,
-            category_id: 1,
-            category_name: "Espresso",
-            image_url: "",
-            is_available: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ]
-
-        setCategories(mockCategories)
-        setProducts(mockProducts)
-
-        toast.error('Using mock data', {
-          description: 'Could not fetch products from database',
-        })
-      } else {
+      // Fetch categories for filter (cached or separate)
+      // Only fetch once ideally, but simple enough to fetch here or separate effect. 
+      // Let's keep distinct.
+      if (categories.length === 0) {
+        const { data: categoriesData } = await supabase
+          .from('categories')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name')
         setCategories(categoriesData || [])
-        setProducts(productsData || [])
       }
 
-      setLoading(false)
+      const params = new URLSearchParams()
+      params.set('page', (pagination.pageIndex + 1).toString())
+      params.set('limit', pagination.pageSize.toString())
+
+      if (debouncedSearch) {
+        params.set('search', debouncedSearch)
+      }
+
+      if (sorting.length > 0) {
+        params.set('sortBy', sorting[0].id)
+        params.set('sortOrder', sorting[0].desc ? 'desc' : 'asc')
+      }
+
+      // Check for category filter if implemented via columnFilters, assuming id "category_name" or custom
+      // Actually current DataTable doesn't easily expose category dropdown unless we build it custom.
+      // For now, support columnFilters if they map to fields.
+
+      const response = await fetch(`/api/admin/products?${params.toString()}`)
+      if (!response.ok) throw new Error('Failed to fetch products')
+
+      const data = await response.json()
+      setProducts(data.data)
+      setRowCount(data.meta.total)
     } catch (error) {
       console.error("Error fetching data:", error)
-      toast.error('Failed to load products', {
-        description: 'An unexpected error occurred',
-      })
+      toast.error('Failed to load products')
+    } finally {
       setLoading(false)
     }
   }
@@ -275,9 +323,9 @@ export default function ProductsPage() {
     )
   }
 
-  const totalProducts = products.length
-  const availableProducts = products.filter(p => p.is_available).length
-  const totalValue = products.reduce((sum, product) => sum + product.price, 0)
+  const totalProducts = rowCount
+  // const availableProducts = products.filter(p => p.is_available).length // Only current page
+  // const totalValue = products.reduce((sum, product) => sum + product.price, 0) // Only current page
 
   return (
     <PermissionGuard
@@ -319,27 +367,7 @@ export default function ProductsPage() {
             <CardContent>
               <div className="text-2xl font-bold">{totalProducts}</div>
               <p className="text-xs text-muted-foreground">
-                {availableProducts} available
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Average Price</CardTitle>
-              <Banknote className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                {totalProducts > 0
-                  ? new Intl.NumberFormat("id-ID", {
-                    style: "currency",
-                    currency: "IDR",
-                    minimumFractionDigits: 0,
-                  }).format(totalValue / totalProducts)
-                  : 'Rp 0'}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Per product
+                Total items in catalog
               </p>
             </CardContent>
           </Card>
@@ -364,7 +392,7 @@ export default function ProductsPage() {
               Products Overview
             </CardTitle>
             <CardDescription>
-              Manage your coffee shop's product catalog
+              Manage product catalog.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -373,6 +401,13 @@ export default function ProductsPage() {
               data={products}
               searchKey="name"
               searchPlaceholder="Search products..."
+              rowCount={rowCount}
+              pagination={pagination}
+              onPaginationChange={setPagination}
+              sorting={sorting}
+              onSortingChange={setSorting}
+              globalFilter={globalFilter}
+              onGlobalFilterChange={setGlobalFilter}
             />
           </CardContent>
         </Card >

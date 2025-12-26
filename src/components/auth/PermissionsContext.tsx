@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState } from "react"
+import React, { createContext, useContext, useEffect, useState, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 
@@ -16,19 +16,37 @@ const PermissionsContext = createContext<PermissionsContextType | undefined>(und
 export function PermissionsProvider({ children }: { children: React.ReactNode }) {
     const [permissions, setPermissions] = useState<string[]>([])
     const [isLoading, setIsLoading] = useState(true)
+    const hasFetched = useRef(false)
 
     useEffect(() => {
+        // Only run once per mount
+        if (hasFetched.current) return
+        hasFetched.current = true
+
         const fetchPermissions = async () => {
-            const cached = localStorage.getItem('app_permissions')
-            // Optimistically set cached permissions if available
-            if (cached) {
+            const CACHE_KEY = 'app_permissions'
+            const CACHE_TIME_KEY = 'app_permissions_timestamp'
+            const CACHE_EXPIRATION = 10 * 60 * 1000 // 10 minutes
+
+            const cached = localStorage.getItem(CACHE_KEY)
+            const cachedTimestamp = localStorage.getItem(CACHE_TIME_KEY)
+            const now = Date.now()
+
+            // Try to use cache if it's not expired
+            if (cached && cachedTimestamp) {
                 try {
                     const parsed = JSON.parse(cached)
-                    setPermissions(parsed)
-                    setIsLoading(false)
+                    const timestamp = parseInt(cachedTimestamp)
+
+                    if (now - timestamp < CACHE_EXPIRATION) {
+                        setPermissions(parsed)
+                        setIsLoading(false)
+                        return // Exit early if cache is fresh
+                    }
                 } catch (e) {
                     console.error('Error parsing cached permissions', e)
-                    localStorage.removeItem('app_permissions')
+                    localStorage.removeItem(CACHE_KEY)
+                    localStorage.removeItem(CACHE_TIME_KEY)
                 }
             }
 
@@ -43,7 +61,8 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
 
                 if (data.permissions) {
                     setPermissions(data.permissions)
-                    localStorage.setItem('app_permissions', JSON.stringify(data.permissions))
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(data.permissions))
+                    localStorage.setItem(CACHE_TIME_KEY, now.toString())
                 }
             } catch (error) {
                 console.error('Error in permission provider:', error)

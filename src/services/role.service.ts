@@ -17,14 +17,16 @@ export interface UpdateRoleDTO {
   description?: string
 }
 
+import { PaginationParams, PaginatedResult } from '@/types/pagination'
+
 export class RoleService {
   constructor(private roleRepo: IRoleRepository) { }
 
   /**
    * Get all roles
    */
-  async getAllRoles() {
-    return this.roleRepo.findAll()
+  async getAllRoles(params?: PaginationParams): Promise<PaginatedResult<any>> {
+    return this.roleRepo.findAll(params)
   }
 
   /**

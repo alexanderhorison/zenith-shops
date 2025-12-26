@@ -13,8 +13,10 @@ export interface Product {
     }
 }
 
+import { PaginationParams, PaginatedResult } from '@/types/pagination'
+
 export interface IProductRepository {
-    findAll(): Promise<Product[]>
+    findAll(params?: PaginationParams): Promise<PaginatedResult<Product>>
     findById(id: string): Promise<Product | null>
     create(data: { name: string, description?: string, price: number, category_id?: number, image_url?: string, is_available?: boolean }): Promise<Product>
     update(id: string, data: Partial<{ name: string, description: string, price: number, category_id: number, image_url: string, is_available: boolean }>): Promise<Product>

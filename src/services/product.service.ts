@@ -29,14 +29,16 @@ export interface UpdateProductDTO {
     is_available?: boolean
 }
 
+import { PaginationParams, PaginatedResult } from '@/types/pagination'
+
 export class ProductService {
     constructor(private productRepo: IProductRepository) { }
 
     /**
      * Get all products
      */
-    async getAllProducts() {
-        return this.productRepo.findAll()
+    async getAllProducts(params?: PaginationParams): Promise<PaginatedResult<any>> {
+        return this.productRepo.findAll(params)
     }
 
     /**

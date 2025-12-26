@@ -16,14 +16,16 @@ export interface UserUpdateData {
   password?: string
 }
 
+import { PaginationParams, PaginatedResult } from '@/types/pagination'
+
 export class UserService {
   constructor(private userRepo: IUserRepository) { }
 
   /**
    * Get all users with their roles
    */
-  async getAllUsers() {
-    return this.userRepo.findAll()
+  async getAllUsers(params?: PaginationParams): Promise<PaginatedResult<any>> {
+    return this.userRepo.findAll(params)
   }
 
   /**

@@ -4,7 +4,9 @@ import {
     Shield,
     Package,
     Coffee,
-    LucideIcon
+    LucideIcon,
+    UserCircle,
+    ShoppingCart
 } from 'lucide-react'
 import { PERMISSIONS } from '@/lib/permission-constants'
 
@@ -62,6 +64,23 @@ export const MENU_GROUPS: MenuGroup[] = [
                 url: "/dashboard/admin/products",
                 icon: Coffee,
                 permission: PERMISSIONS.MENU.PRODUCTS
+            }
+        ]
+    },
+    {
+        label: "Order Management",
+        items: [
+            {
+                title: "Orders",
+                url: "/dashboard/admin/orders",
+                icon: ShoppingCart,
+                permission: PERMISSIONS.MENU.ORDERS
+            },
+            {
+                title: "Customers",
+                url: "/dashboard/admin/customers",
+                icon: UserCircle,
+                permission: PERMISSIONS.MENU.CUSTOMERS
             }
         ]
     }
