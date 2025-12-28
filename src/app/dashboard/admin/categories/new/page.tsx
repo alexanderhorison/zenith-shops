@@ -83,7 +83,7 @@ export default function NewCategoryPage() {
             console.error("Error creating category:", error)
             const errorMessage = error?.message || error?.details || "Unknown error occurred"
             toast.error("Failed to create category", {
-                description: errorMessage,
+                description: getToastTimestamp(),
             })
             setSaving(false)
         }

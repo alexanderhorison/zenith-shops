@@ -108,7 +108,9 @@ export default function CustomersPage() {
             setRowCount(data.meta.total)
         } catch (error) {
             console.error('Error fetching customers:', error)
-            toast.error('Failed to load customers')
+            toast.error('Failed to load customers', {
+                description: getToastTimestamp(),
+            })
         } finally {
             setLoading(false)
         }
@@ -133,7 +135,9 @@ export default function CustomersPage() {
             })
             fetchCustomers()
         } catch (error) {
-            toast.error('Failed to update status')
+            toast.error('Failed to update status', {
+                description: getToastTimestamp(),
+            })
         }
     }
 

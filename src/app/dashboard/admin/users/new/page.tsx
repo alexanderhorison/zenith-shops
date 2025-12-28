@@ -48,10 +48,10 @@ export default function AddUserPage() {
 
   const fetchRoles = async () => {
     try {
-      const response = await fetch('/api/admin/roles')
+      const response = await fetch('/api/admin/roles?limit=100')
       const data = await response.json()
       if (response.ok) {
-        setRoles(data.roles || [])
+        setRoles(data.data || [])
       } else {
         console.error('Failed to fetch roles:', data.error)
       }

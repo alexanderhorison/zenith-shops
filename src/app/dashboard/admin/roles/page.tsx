@@ -175,7 +175,9 @@ export default function RoleManagementPage() {
       setRowCount(data.meta.total)
     } catch (error) {
       console.error('Error fetching roles:', error)
-      toast.error('Error connecting to server')
+      toast.error('Error connecting to server', {
+        description: getToastTimestamp(),
+      })
     } finally {
       setLoading(false)
     }

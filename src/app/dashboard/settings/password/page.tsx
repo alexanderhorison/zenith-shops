@@ -33,19 +33,25 @@ export default function ChangePasswordPage() {
     setSaving(true)
 
     if (formData.newPassword !== formData.confirmPassword) {
-      toast.error('New passwords do not match')
+      toast.error('New passwords do not match', {
+        description: getToastTimestamp(),
+      })
       setSaving(false)
       return
     }
 
     if (!formData.currentPassword || !formData.newPassword) {
-      toast.error('Please fill in all required fields')
+      toast.error('Please fill in all required fields', {
+        description: getToastTimestamp(),
+      })
       setSaving(false)
       return
     }
 
     if (formData.newPassword.length < 6) {
-      toast.error('New password must be at least 6 characters long')
+      toast.error('New password must be at least 6 characters long', {
+        description: getToastTimestamp(),
+      })
       setSaving(false)
       return
     }
@@ -73,10 +79,14 @@ export default function ChangePasswordPage() {
         })
         setTimeout(() => router.push('/dashboard'), 2000)
       } else {
-        toast.error(data.error || 'Failed to change password')
+        toast.error(data.error || 'Failed to change password', {
+          description: getToastTimestamp(),
+        })
       }
     } catch (err) {
-      toast.error('Failed to change password')
+      toast.error('Failed to change password', {
+        description: getToastTimestamp(),
+      })
     } finally {
       setSaving(false)
     }

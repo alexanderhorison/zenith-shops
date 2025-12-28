@@ -241,7 +241,9 @@ export default function UserManagementPage() {
       setRowCount(data.meta.total)
     } catch (error) {
       console.error('Error fetching users:', error)
-      toast.error('Error connecting to server')
+      toast.error('Error connecting to server', {
+        description: getToastTimestamp(),
+      })
     } finally {
       setLoading(false)
     }
@@ -293,11 +295,15 @@ export default function UserManagementPage() {
         })
         await fetchUsers()
       } else {
-        toast.error('Failed to delete user')
+        toast.error('Failed to delete user', {
+          description: getToastTimestamp(),
+        })
       }
     } catch (error) {
       console.error('Error deleting user:', error)
-      toast.error('Error deleting user')
+      toast.error('Error deleting user', {
+        description: getToastTimestamp(),
+      })
     } finally {
       setDeleteUserId(null)
     }

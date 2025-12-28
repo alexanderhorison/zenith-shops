@@ -208,7 +208,9 @@ export default function CategoriesPage() {
       setRowCount(data.meta.total)
     } catch (error) {
       console.error("Error fetching categories:", error)
-      toast.error('Failed to load categories')
+      toast.error('Failed to load categories', {
+        description: getToastTimestamp(),
+      })
     } finally {
       setLoading(false)
     }

@@ -168,7 +168,7 @@ export default function EditRolePage() {
 
       if (!response.ok) {
         toast.error('Failed to update role', {
-          description: data.error || 'Unknown error occurred',
+          description: getToastTimestamp(),
         })
         setSaving(false)
         return
@@ -186,7 +186,7 @@ export default function EditRolePage() {
       if (!permissionsResponse.ok) {
         const permData = await permissionsResponse.json()
         toast.error('Failed to update permissions', {
-          description: permData.error || 'Role updated but failed to update permissions',
+          description: getToastTimestamp(),
         })
         setSaving(false)
         return

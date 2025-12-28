@@ -149,7 +149,7 @@ export default function DashboardLayout({
   if (loading) {
     return (
       <SidebarProvider>
-        <div className="min-h-screen flex w-full">
+        <div className="h-screen flex w-full overflow-hidden">
           <Sidebar className="shrink-0">
             <SidebarHeader className="border-b px-6 py-4">
               <div className="flex items-center space-x-2">
@@ -229,7 +229,7 @@ function LayoutContent({
   return (
     <>
       <SidebarProvider>
-        <div className="min-h-screen flex w-full">
+        <div className="h-screen flex w-full overflow-hidden">
           <Sidebar className="shrink-0">
             <SidebarHeader className="border-b px-6 py-4">
               <div className="flex items-center space-x-2">

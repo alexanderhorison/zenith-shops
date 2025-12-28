@@ -104,7 +104,9 @@ export default function OrdersPage() {
             setRowCount(data.meta.total)
         } catch (error) {
             console.error('Error fetching orders:', error)
-            toast.error('Failed to load orders')
+            toast.error('Failed to load orders', {
+                description: getToastTimestamp()
+            })
         } finally {
             setLoading(false)
         }

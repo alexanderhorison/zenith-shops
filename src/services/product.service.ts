@@ -18,6 +18,8 @@ export interface CreateProductDTO {
     category_id?: number
     image_url?: string
     is_available?: boolean
+    tag_ids?: number[]
+    variants?: any[]
 }
 
 export interface UpdateProductDTO {
@@ -27,6 +29,8 @@ export interface UpdateProductDTO {
     category_id?: number
     image_url?: string
     is_available?: boolean
+    tag_ids?: number[]
+    variants?: any[]
 }
 
 import { PaginationParams, PaginatedResult } from '@/types/pagination'
@@ -62,7 +66,9 @@ export class ProductService {
             price: data.price,
             category_id: data.category_id || undefined,
             image_url: data.image_url || undefined,
-            is_available: data.is_available
+            is_available: data.is_available,
+            tag_ids: data.tag_ids,
+            variants: data.variants
         })
     }
 
@@ -70,7 +76,6 @@ export class ProductService {
      * Update an existing product
      */
     async updateProduct(id: string, data: UpdateProductDTO) {
-        // Need to be careful with optional fields in Partial<T>
         const updateData: any = {}
         if (data.name !== undefined) updateData.name = data.name
         if (data.description !== undefined) updateData.description = data.description
@@ -78,6 +83,8 @@ export class ProductService {
         if (data.category_id !== undefined) updateData.category_id = data.category_id
         if (data.image_url !== undefined) updateData.image_url = data.image_url
         if (data.is_available !== undefined) updateData.is_available = data.is_available
+        if (data.tag_ids !== undefined) updateData.tag_ids = data.tag_ids
+        if (data.variants !== undefined) updateData.variants = data.variants
 
         return this.productRepo.update(id, updateData)
     }

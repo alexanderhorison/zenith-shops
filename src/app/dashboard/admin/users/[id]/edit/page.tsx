@@ -51,13 +51,13 @@ export default function EditUserPage() {
       // Load both user and roles in parallel
       const [userResponse, rolesResponse] = await Promise.all([
         fetch(`/api/admin/users/${params.id}`),
-        fetch('/api/admin/roles')
+        fetch('/api/admin/roles?limit=100')
       ])
 
       // Process roles first
       const rolesData = await rolesResponse.json()
-      if (rolesResponse.ok && rolesData.roles) {
-        setRoles(rolesData.roles)
+      if (rolesResponse.ok && rolesData.data) {
+        setRoles(rolesData.data)
       } else {
         console.error('Failed to load roles:', rolesData)
         toast.error('Failed to load roles')

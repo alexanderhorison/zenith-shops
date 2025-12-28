@@ -50,10 +50,14 @@ export default function ProfilePage() {
           full_name: data.profile.full_name || ''
         })
       } else {
-        toast.error('Failed to load profile')
+        toast.error('Failed to load profile', {
+          description: getToastTimestamp(),
+        })
       }
     } catch (err) {
-      toast.error('Failed to load profile')
+      toast.error('Failed to load profile', {
+        description: getToastTimestamp(),
+      })
     } finally {
       setLoading(false)
     }
@@ -80,10 +84,14 @@ export default function ProfilePage() {
         })
         setProfile(data.profile)
       } else {
-        toast.error(data.error || 'Failed to update profile')
+        toast.error(data.error || 'Failed to update profile', {
+          description: getToastTimestamp(),
+        })
       }
     } catch (err) {
-      toast.error('Failed to update profile')
+      toast.error('Failed to update profile', {
+        description: getToastTimestamp(),
+      })
     } finally {
       setSaving(false)
     }

@@ -12,6 +12,7 @@ export interface PaginatedMeta {
     page: number
     limit: number
     totalPages: number
+    stats?: Record<string, any>
 }
 
 export interface PaginatedResult<T> {
@@ -23,7 +24,8 @@ export function createPaginatedResult<T>(
     data: T[],
     total: number,
     page: number,
-    limit: number
+    limit: number,
+    stats?: Record<string, any>
 ): PaginatedResult<T> {
     return {
         data,
@@ -31,7 +33,8 @@ export function createPaginatedResult<T>(
             total,
             page,
             limit,
-            totalPages: Math.ceil(total / limit)
+            totalPages: Math.ceil(total / limit),
+            stats
         }
     }
 }

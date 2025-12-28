@@ -28,6 +28,17 @@ interface Product {
     id: number
     name: string
   }
+  tags?: {
+    id: number
+    name: string
+    color: string
+  }[]
+  variants?: {
+    id: number
+    variant_group: string
+    name: string
+    price_override: number | null
+  }[]
   image_url: string
   is_available: boolean
   created_at: string
@@ -45,6 +56,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
+  const [avgPrice, setAvgPrice] = useState(0)
   const [deleteProductId, setDeleteProductId] = useState<number | null>(null)
   const toastShownRef = useRef(false)
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -69,7 +81,7 @@ export default function ProductsPage() {
             onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
             className="h-8 p-0 font-semibold"
           >
-            Name
+            Product
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         )
@@ -77,11 +89,34 @@ export default function ProductsPage() {
       cell: ({ row }) => {
         const product = row.original
         return (
-          <div>
-            <div className="font-medium">{product.name}</div>
-            <div className="text-sm text-muted-foreground line-clamp-1">
+          <div className="flex flex-col gap-1 py-1">
+            <div className="font-semibold text-primary/90">{product.name}</div>
+            <div className="text-xs text-muted-foreground line-clamp-1 max-w-[200px]">
               {product.description}
             </div>
+          </div>
+        )
+      },
+    },
+    {
+      id: "labels",
+      header: "Labels",
+      cell: ({ row }) => {
+        const product = row.original
+        if (!product.tags || product.tags.length === 0) {
+          return <span className="text-xs text-muted-foreground/40 italic">No labels</span>
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {product.tags.map(tag => (
+              <Badge
+                key={tag.id}
+                variant="outline"
+                className="text-xs px-2 py-0.5 bg-primary/5 border-primary/20 text-primary whitespace-nowrap"
+              >
+                {tag.name}
+              </Badge>
+            ))}
           </div>
         )
       },
@@ -103,7 +138,7 @@ export default function ProductsPage() {
       cell: ({ row }) => {
         const category = row.original.category
         return (
-          <Badge variant="outline">
+          <Badge variant="outline" className="font-normal border-muted-foreground/20">
             {category?.name || "Uncategorized"}
           </Badge>
         )
@@ -125,12 +160,32 @@ export default function ProductsPage() {
       },
       cell: ({ row }) => {
         const price = parseFloat(row.getValue("price"))
+        const product = row.original
         const formatted = new Intl.NumberFormat("id-ID", {
           style: "currency",
           currency: "IDR",
           minimumFractionDigits: 0,
         }).format(price)
-        return <div className="font-medium">{formatted}</div>
+
+        return (
+          <div className="flex flex-col gap-0.5">
+            <div className="font-bold text-sm">{formatted}</div>
+            {product.variants && product.variants.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground/80 leading-tight">
+                {Array.from(new Set(product.variants.map(v => v.variant_group))).map((groupName, idx, arr) => {
+                  const groupOptions = product.variants?.filter(v => v.variant_group === groupName) || [];
+                  return (
+                    <span key={groupName} className="flex items-center gap-1">
+                      <span className="font-medium text-foreground/60">{groupName}</span>
+                      <span className="opacity-70">({groupOptions.length})</span>
+                      {idx < arr.length - 1 && <span className="text-muted-foreground/30 ml-1">•</span>}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )
       },
     },
     {
@@ -150,27 +205,14 @@ export default function ProductsPage() {
       cell: ({ row }) => {
         const isAvailable = row.getValue("is_available") as boolean
         return (
-          <Badge variant={isAvailable ? "default" : "secondary"}>
-            {isAvailable ? "Available" : "Unavailable"}
+          <Badge
+            variant={isAvailable ? "default" : "secondary"}
+            className={isAvailable ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20" : ""}
+          >
+            {isAvailable ? "Available" : "Hidden"}
           </Badge>
         )
       },
-    },
-    {
-      accessorKey: "created_at",
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="h-8 p-0 font-semibold"
-          >
-            Created
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        )
-      },
-      cell: ({ row }) => new Date(row.getValue("created_at")).toLocaleDateString(),
     },
     {
       id: "actions",
@@ -183,6 +225,8 @@ export default function ProductsPage() {
               <LoadingIconButton
                 url={`/dashboard/admin/products/${product.id}/edit`}
                 icon={<Pencil className="h-4 w-4" />}
+                variant="outline"
+                className="hover:bg-primary/5 hover:text-primary border-muted-foreground/20"
               />
             </PermissionGuard>
             <PermissionGuard permission="action.products.delete">
@@ -190,7 +234,7 @@ export default function ProductsPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => handleDelete(product.id)}
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive hover:bg-destructive/5 border-muted-foreground/20"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -253,9 +297,12 @@ export default function ProductsPage() {
       const data = await response.json()
       setProducts(data.data)
       setRowCount(data.meta.total)
+      setAvgPrice(data.meta.stats?.avgPrice || 0)
     } catch (error) {
       console.error("Error fetching data:", error)
-      toast.error('Failed to load products')
+      toast.error('Failed to load products', {
+        description: getToastTimestamp(),
+      })
     } finally {
       setLoading(false)
     }
@@ -380,6 +427,20 @@ export default function ProductsPage() {
               <div className="text-2xl font-bold">{categories.length}</div>
               <p className="text-xs text-muted-foreground">
                 Active categories
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Avg. Base Price</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(avgPrice)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Across all products
               </p>
             </CardContent>
           </Card>
