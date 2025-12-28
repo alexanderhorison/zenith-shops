@@ -110,4 +110,51 @@ export class SupabaseOrderRepository implements IOrderRepository {
 
         return order as unknown as Order
     }
+
+    async create(data: {
+        user_id?: string;
+        status: string;
+        total_amount: number;
+        items: Array<{
+            product_id: number;
+            quantity: number;
+            unit_price: number;
+            selected_variants?: Record<string, string>;
+        }>
+    }): Promise<Order> {
+        const supabase = await createClient()
+
+        // 1. Create Order
+        const { data: order, error: orderError } = await supabase
+            .from('orders')
+            .insert({
+                user_id: data.user_id,
+                status: data.status,
+                total_amount: data.total_amount,
+                // created_at / updated_at handled by DB default
+            })
+            .select()
+            .single()
+
+        if (orderError) throw new Error(`Failed to create order: ${orderError.message}`)
+
+        // 2. Create Order Items
+        if (data.items && data.items.length > 0) {
+            const orderItems = data.items.map(item => ({
+                order_id: order.id,
+                product_id: item.product_id,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                selected_variants: item.selected_variants || null
+            }))
+
+            const { error: itemsError } = await supabase
+                .from('order_items')
+                .insert(orderItems)
+
+            if (itemsError) throw new Error(`Failed to create order items: ${itemsError.message}`)
+        }
+
+        return this.findById(order.id) as Promise<Order>
+    }
 }

@@ -299,6 +299,13 @@ export default function OrdersPage() {
                         View and manage customer orders.
                     </p>
                 </div>
+                <PermissionGuard permission={PERMISSIONS.ACTIONS.ORDERS.MANAGE}>
+                    <Link href="/dashboard/admin/orders/new">
+                        <Button>
+                            Create Order
+                        </Button>
+                    </Link>
+                </PermissionGuard>
             </div>
 
             <Card>

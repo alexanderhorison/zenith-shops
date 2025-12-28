@@ -39,6 +39,7 @@ export const PERMISSIONS = {
         },
         ORDERS: {
             VIEW: 'action.orders.view',
+            MANAGE: 'action.orders.manage', // Create/Update status
         },
     },
 } as const;

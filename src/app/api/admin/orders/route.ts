@@ -34,3 +34,16 @@ export async function GET(request: Request) {
         }
     })
 }
+
+export async function POST(request: Request) {
+    return withPermission(PERMISSIONS.ACTIONS.ORDERS.MANAGE, async () => {
+        try {
+            const body = await request.json()
+            const result = await orderService.createOrder(body)
+            return NextResponse.json(result)
+        } catch (error: any) {
+            console.error('Error in POST /api/admin/orders:', error)
+            return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
+        }
+    })
+}

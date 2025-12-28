@@ -4,6 +4,7 @@ export interface OrderItem {
     product_id: number
     quantity: number
     unit_price: string
+    selected_variants?: Record<string, string> // JSONB: { "Size": "L", "Milk": "Oat" }
     product?: {
         name: string
         image_url: string | null
@@ -29,4 +30,15 @@ import { PaginationParams, PaginatedResult } from '@/types/pagination'
 export interface IOrderRepository {
     findAll(params?: PaginationParams): Promise<PaginatedResult<Order>>
     findById(id: number): Promise<Order | null>
+    create(data: {
+        user_id?: string;
+        status: string;
+        total_amount: number;
+        items: Array<{
+            product_id: number;
+            quantity: number;
+            unit_price: number;
+            selected_variants?: Record<string, string>;
+        }>
+    }): Promise<Order>
 }
