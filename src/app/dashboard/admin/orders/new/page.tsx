@@ -26,16 +26,41 @@ import { PermissionGuard } from "@/components/auth/PermissionGuard"
 import { PERMISSIONS } from "@/lib/permission-constants"
 import { getToastTimestamp } from "@/lib/utils"
 
+const orderItemSchema = z.object({
+    product_id: z.number().int().positive("Product ID must be a positive integer"),
+    quantity: z.number().int().positive("Quantity must be greater than 0"),
+    unit_price: z.number().nonnegative("Unit price cannot be negative").optional(),
+    selected_variants: z.record(z.string()).optional(),
+})
+
+const orderJsonSchema = z.object({
+    customer_id: z.string().uuid("Customer ID must be a valid UUID").optional().nullable(),
+    status: z.enum(["pending", "completed", "cancelled"]),
+    items: z.array(orderItemSchema).min(1, "Order must have at least one item"),
+})
+
 const formSchema = z.object({
-    jsonInput: z.string().refine((val) => {
+    jsonInput: z.string().superRefine((val, ctx) => {
         try {
-            JSON.parse(val)
-            return true
-        } catch {
-            return false
+            const parsed = JSON.parse(val)
+            const result = orderJsonSchema.safeParse(parsed)
+
+            if (!result.success) {
+                result.error.issues.forEach((issue) => {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        message: `${issue.path.join(".") || "root"}: ${issue.message}`,
+                    })
+                })
+                return z.NEVER
+            }
+        } catch (e) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Invalid JSON syntax. Check for trailing commas or quote marks.",
+            })
+            return z.NEVER
         }
-    }, {
-        message: "Invalid JSON format",
     }),
 })
 
@@ -47,8 +72,8 @@ export default function NewOrderPage() {
         resolver: zodResolver(formSchema),
         defaultValues: {
             jsonInput: JSON.stringify({
+                customer_id: null, // Insert Customer UUID here, or keep null for Guest
                 status: "pending",
-                total_amount: 0,
                 items: [
                     {
                         product_id: 1,
@@ -69,17 +94,25 @@ export default function NewOrderPage() {
         try {
             const parsedData = JSON.parse(values.jsonInput)
 
-            // Basic validation of structure
-            if (!parsedData.status || !parsedData.items || !Array.isArray(parsedData.items)) {
-                throw new Error("Invalid order structure. Must contain status and items array.")
+            // Double check with schema to catch specific errors for the toast
+            const validation = orderJsonSchema.safeParse(parsedData)
+            if (!validation.success) {
+                throw new Error(validation.error.issues.map(i => i.message).join(", "))
             }
+
+            // Map customer_id to user_id for the backend
+            const payload = {
+                ...parsedData,
+                user_id: parsedData.customer_id
+            }
+            delete payload.customer_id
 
             const response = await fetch('/api/admin/orders', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(parsedData),
+                body: JSON.stringify(payload),
             })
 
             const result = await response.json()
@@ -95,9 +128,10 @@ export default function NewOrderPage() {
             router.push('/dashboard/admin/orders')
             router.refresh()
         } catch (error: any) {
-            console.error(error)
+            // Suppress console error to prevent Next.js overlay for validation errors
+            // console.error(error) 
             toast.error("Failed to create order", {
-                description: error.message || getToastTimestamp(),
+                description: error.message || "Please check your input",
             })
         } finally {
             setIsLoading(false)
@@ -126,7 +160,7 @@ export default function NewOrderPage() {
                                 <FormField
                                     control={form.control}
                                     name="jsonInput"
-                                    render={({ field }) => (
+                                    render={({ field }: { field: any }) => (
                                         <FormItem>
                                             <FormLabel>JSON Payload</FormLabel>
                                             <FormControl>
@@ -137,7 +171,7 @@ export default function NewOrderPage() {
                                                 />
                                             </FormControl>
                                             <FormDescription>
-                                                Ensure valid JSON syntax. `total_amount` can be 0 (auto-calculated logic not implemented yet).
+                                                Ensure valid JSON syntax. `price` is fetched automatically from DB.
                                             </FormDescription>
                                             <FormMessage />
                                         </FormItem>

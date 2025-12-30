@@ -147,7 +147,7 @@ export default function OrdersPage() {
         },
         {
             id: "customer_name",
-            accessorFn: (row) => row.customer.full_name,
+            accessorFn: (row) => row.customer?.full_name || "Guest",
             header: ({ column }) => {
                 return (
                     <Button
@@ -164,8 +164,8 @@ export default function OrdersPage() {
                 const customer = row.original.customer
                 return (
                     <div className="flex flex-col">
-                        <span className="font-medium">{customer.full_name || "Guest"}</span>
-                        <span className="text-xs text-muted-foreground">{customer.email}</span>
+                        <span className="font-medium">{customer?.full_name || "Guest"}</span>
+                        <span className="text-xs text-muted-foreground">{customer?.email || "N/A"}</span>
                     </div>
                 )
             }

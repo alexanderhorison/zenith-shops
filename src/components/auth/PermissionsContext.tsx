@@ -24,7 +24,7 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
         hasFetched.current = true
 
         const fetchPermissions = async () => {
-            const CACHE_KEY = 'app_permissions'
+            const CACHE_KEY = 'app_permissions_v3'
             const CACHE_TIME_KEY = 'app_permissions_timestamp'
             const CACHE_EXPIRATION = 10 * 60 * 1000 // 10 minutes
 

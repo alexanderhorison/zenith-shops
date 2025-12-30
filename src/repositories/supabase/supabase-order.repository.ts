@@ -124,36 +124,108 @@ export class SupabaseOrderRepository implements IOrderRepository {
     }): Promise<Order> {
         const supabase = await createClient()
 
-        // 1. Create Order
+        if (!data.items || data.items.length === 0) {
+            throw new Error("Order must have at least one item")
+        }
+
+        // 1. Fetch Products to get authoritative prices and availability
+        const productIds = data.items.map(item => item.product_id)
+        const { data: products, error: productsError } = await supabase
+            .from('products')
+            .select('id, price, name, is_available')
+            .in('id', productIds)
+
+        if (productsError) throw new Error(`Failed to fetch products: ${productsError.message}`)
+
+        const productMap = new Map(products?.map(p => [p.id, p]))
+
+        // 1b. Fetch Variants for these products to validate availability
+        // Only fetch valid and available variants
+        const { data: variants, error: variantsError } = await supabase
+            .from('product_variants')
+            .select('product_id, variant_group, name, is_available')
+            .in('product_id', productIds)
+            .eq('is_available', true)
+
+        if (variantsError) throw new Error(`Failed to fetch variants: ${variantsError.message}`)
+
+        // Create a lookup: product_id -> Map<Group, Set<Name>>
+        const variantMap = new Map<number, Map<string, Set<string>>>()
+        variants?.forEach(v => {
+            if (!variantMap.has(v.product_id)) {
+                variantMap.set(v.product_id, new Map())
+            }
+            const groupMap = variantMap.get(v.product_id)!
+            if (!groupMap.has(v.variant_group)) {
+                groupMap.set(v.variant_group, new Set())
+            }
+            groupMap.get(v.variant_group)!.add(v.name)
+        })
+
+        // 2. Calculate Total and Prepare Items
+        let calculatedTotal = 0
+        const orderItemsToInsert: any[] = []
+
+        for (const item of data.items) {
+            const product = productMap.get(item.product_id)
+            if (!product) {
+                throw new Error(`Product with ID ${item.product_id} not found`)
+            }
+
+            if (!product.is_available) {
+                throw new Error(`Product '${product.name}' is currently unavailable`)
+            }
+
+            // Validate Variants
+            if (item.selected_variants) {
+                const productVariants = variantMap.get(item.product_id)
+
+                for (const [group, name] of Object.entries(item.selected_variants)) {
+                    // Check if the group exists and the specific option name exists within that group
+                    const availableNames = productVariants?.get(group)
+
+                    if (!availableNames || !availableNames.has(name)) {
+                        throw new Error(`Variant '${group}: ${name}' is not available for product '${product.name}'`)
+                    }
+                }
+            }
+
+            const realPrice = Number(product.price)
+            const quantity = item.quantity
+            calculatedTotal += realPrice * quantity
+
+            orderItemsToInsert.push({
+                product_id: item.product_id,
+                quantity: quantity,
+                unit_price: realPrice, // Authoritative price
+                selected_variants: item.selected_variants || null
+            })
+        }
+
+        // 3. Create Order with Calculated Total
         const { data: order, error: orderError } = await supabase
             .from('orders')
             .insert({
                 user_id: data.user_id,
                 status: data.status,
-                total_amount: data.total_amount,
-                // created_at / updated_at handled by DB default
+                total_amount: calculatedTotal, // Security: ignore client-provided total
             })
             .select()
             .single()
 
         if (orderError) throw new Error(`Failed to create order: ${orderError.message}`)
 
-        // 2. Create Order Items
-        if (data.items && data.items.length > 0) {
-            const orderItems = data.items.map(item => ({
-                order_id: order.id,
-                product_id: item.product_id,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                selected_variants: item.selected_variants || null
-            }))
+        // 4. Create Order Items
+        const itemsWithOrderId = orderItemsToInsert.map(item => ({
+            ...item,
+            order_id: order.id
+        }))
 
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .insert(orderItems)
+        const { error: itemsError } = await supabase
+            .from('order_items')
+            .insert(itemsWithOrderId)
 
-            if (itemsError) throw new Error(`Failed to create order items: ${itemsError.message}`)
-        }
+        if (itemsError) throw new Error(`Failed to create order items: ${itemsError.message}`)
 
         return this.findById(order.id) as Promise<Order>
     }

@@ -30,6 +30,7 @@ interface OrderItem {
     id: number
     quantity: number
     unit_price: string
+    selected_variants: Record<string, string> | null
     product: {
         name: string
         image_url: string | null
@@ -44,7 +45,7 @@ interface OrderDetails {
     customer: {
         full_name: string
         email: string
-    }
+    } | null
     items: OrderItem[]
 }
 
@@ -134,10 +135,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                                     <div key={item.id} className="flex items-center justify-between">
                                         <div className="flex items-center gap-4">
                                             <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
-                                                {item.product.image_url ? (
+                                                {item.product?.image_url ? (
                                                     <img
                                                         src={item.product.image_url}
-                                                        alt={item.product.name}
+                                                        alt={item.product?.name || 'Product'}
                                                         className="h-full w-full object-cover"
                                                     />
                                                 ) : (
@@ -145,8 +146,17 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                                                 )}
                                             </div>
                                             <div>
-                                                <p className="font-medium">{item.product.name}</p>
-                                                <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
+                                                <p className="font-medium">{item.product?.name || 'Unknown Product'}</p>
+                                                {item.selected_variants && Object.keys(item.selected_variants).length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {Object.entries(item.selected_variants).map(([key, value]) => (
+                                                            <Badge key={key} variant="secondary" className="text-xs px-1 py-0 h-5">
+                                                                {key}: {value}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                <p className="text-sm text-muted-foreground mt-1">Quantity: {item.quantity}</p>
                                             </div>
                                         </div>
                                         <div className="font-medium">
@@ -185,12 +195,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                             <div className="space-y-4">
                                 <div>
                                     <p className="text-sm font-medium text-muted-foreground">Full Name</p>
-                                    <p className="font-medium">{order.customer.full_name}</p>
+                                    <p className="font-medium">{order.customer?.full_name || 'Guest User'}</p>
                                 </div>
                                 <Separator />
                                 <div>
                                     <p className="text-sm font-medium text-muted-foreground">Email</p>
-                                    <p>{order.customer.email}</p>
+                                    <p>{order.customer?.email || 'N/A'}</p>
                                 </div>
                             </div>
                         </CardContent>
